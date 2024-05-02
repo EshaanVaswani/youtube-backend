@@ -215,7 +215,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
          secure: true,
       };
 
-      const { accessToken, refreshToken } =
+      const { accessToken, newRefreshToken } =
          await generateAccessAndRefreshTokens(user._id);
 
       return res
@@ -246,7 +246,7 @@ const changePassword = asyncHandler(async (req, res) => {
    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
 
    if (!isPasswordCorrect) {
-      throw new ApiError(400, "Invalid new password");
+      throw new ApiError(400, "Invalid old password");
    }
 
    user.password = newPassword;
@@ -385,7 +385,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                $size: "$subscribers",
             },
             channelsSubscribedToCount: {
-               $size: "$subscibedTo",
+               $size: "$subscribedTo",
             },
             isSubscribed: {
                $cond: {
@@ -409,7 +409,6 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
          },
       },
    ]);
-   console.log(channel);
 
    if (!channel?.length) {
       throw new ApiError(404, "Channel doesn't exist");

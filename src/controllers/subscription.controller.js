@@ -13,7 +13,7 @@ const toggleSubscription = asyncHandler(async (req, res) => {
 
    const { channelId } = req.params;
 
-   if (!channelId || isValidObjectId(channelId)) {
+   if (!channelId || !isValidObjectId(channelId)) {
       throw new ApiError(400, "Channel id is missing or invalid");
    }
 
@@ -21,6 +21,10 @@ const toggleSubscription = asyncHandler(async (req, res) => {
 
    if (!channel) {
       throw new ApiError(404, "Channel not found");
+   }
+
+   if (channel._id.toString() === req.user?._id.toString()) {
+      throw new ApiError(403, "You cannot subscribe to your own channel");
    }
 
    const isAlreadySubscribed = await Subscription.findOne({
@@ -69,7 +73,7 @@ const toggleSubscription = asyncHandler(async (req, res) => {
 const getUserChannelSubscribers = asyncHandler(async (req, res) => {
    const { channelId } = req.params;
 
-   if (!channelId || isValidObjectId(channelId)) {
+   if (!channelId || !isValidObjectId(channelId)) {
       throw new ApiError(400, "Channel id is missing or invalid");
    }
 
@@ -82,7 +86,7 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
    const subscribers = await Subscription.find({ channel: channelId }).populate(
       {
          path: "subscriber",
-         select: "-password -refreshToken -createdAt -updatedAt",
+         select: "-watchHistory -password -refreshToken -createdAt -updatedAt",
       }
    );
 
@@ -104,7 +108,7 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
 const getSubscribedChannels = asyncHandler(async (req, res) => {
    const { subscriberId } = req.params;
 
-   if (!subscriberId || isValidObjectId(subscriberId)) {
+   if (!subscriberId || !isValidObjectId(subscriberId)) {
       throw new ApiError(400, "Subscriber id is missing or invalid");
    }
 
@@ -118,7 +122,7 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
       subscriber: subscriberId,
    }).populate({
       path: "channel",
-      select: "-password -refreshToken -createdAt -updatedAt",
+      select: "-watchHistory -password -refreshToken -createdAt -updatedAt",
    });
 
    if (!channels) {

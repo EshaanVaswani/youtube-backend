@@ -1,4 +1,5 @@
 import mongoose, { isValidObjectId, mongo } from "mongoose";
+import { User } from "../models/user.model.js";
 import { Video } from "../models/video.model.js";
 import { Like } from "../models/like.model.js";
 import { Comment } from "../models/comment.model.js";
@@ -153,7 +154,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
    const thumbnailOnCloud = await uploadOnCloudinary(thumbnailLocalPath);
    const videoFileOnCloud = await uploadOnCloudinary(videoFileLocalPath);
 
-   if (!thumbnailOnCloud || videoFileOnCloud) {
+   if (!thumbnailOnCloud || !videoFileOnCloud) {
       throw new ApiError(
          400,
          "Thumbnail or video file didn't get uploaded to cloudinary"
@@ -190,15 +191,113 @@ const getVideoById = asyncHandler(async (req, res) => {
       throw new ApiError(400, "Video id missing or invalid");
    }
 
-   const video = await Video.findById(videoId);
+   const video = await Video.aggregate([
+      {
+         $match: {
+            _id: new mongoose.Types.ObjectId(videoId),
+         },
+      },
+      {
+         $lookup: {
+            from: "likes",
+            localField: "_id",
+            foreignField: "video",
+            as: "likes",
+         },
+      },
+      {
+         $addFields: {
+            likeCount: {
+               $size: "$likes",
+            },
+            isLiked: {
+               $cond: {
+                  if: { $in: [req.user._id, "$likes.likedBy"] },
+                  then: true,
+                  else: false,
+               },
+            },
+         },
+      },
+      {
+         $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner",
+            pipeline: [
+               {
+                  $project: {
+                     username: 1,
+                     fullName: 1,
+                     avatar: 1,
+                  },
+               },
+               {
+                  $lookup: {
+                     from: "subscriptions",
+                     localField: "_id",
+                     foreignField: "channel",
+                     as: "subscribers",
+                  },
+               },
+               {
+                  $addFields: {
+                     subscriberCount: {
+                        $size: "$subscribers",
+                     },
+                     isSubscribed: {
+                        $cond: {
+                           if: {
+                              $in: [req.user?._id, "$subscribers.subscriber"],
+                           },
+                           then: true,
+                           else: false,
+                        },
+                     },
+                  },
+               },
+            ],
+         },
+      },
+      {
+         $addFields: {
+            owner: {
+               $first: "$owner",
+            },
+         },
+      },
+   ]);
 
-   if (!video || (!video?.isPublished && !(video?.owner === req.user?._id))) {
+   if (!video) {
       throw new ApiError(404, "Video not found");
    }
 
+   // increment views
+   await Video.findByIdAndUpdate(
+      videoId,
+      {
+         $inc: {
+            views: 1,
+         },
+      },
+      { new: true }
+   );
+
+   // add video to user's watch history
+   await User.findByIdAndUpdate(
+      req.user?._id,
+      {
+         $addToSet: {
+            watchHistory: videoId,
+         },
+      },
+      { new: true }
+   );
+
    return res
       .status(200)
-      .json(new ApiResponse(200, video, "Video found successfully"));
+      .json(new ApiResponse(200, video[0], "Video found successfully"));
 });
 
 const updateVideo = asyncHandler(async (req, res) => {

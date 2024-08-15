@@ -319,7 +319,7 @@ const updateVideo = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Video not found");
    }
 
-   if (video.owner !== req.user?._id) {
+   if (!video.owner.equals(req.user?._id)) {
       throw new ApiError(401, "Unauthorized request to update video");
    }
 
@@ -379,7 +379,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Video not found");
    }
 
-   if (video.owner !== req.user?._id) {
+   if (!video.owner.equals(req.user?._id)) {
       throw new ApiError(401, "Unauthorized request to delete video");
    }
 
@@ -410,7 +410,7 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Video not found");
    }
 
-   if (video.owner !== req.user?._id) {
+   if (!video.owner.equals(req.user?._id)) {
       throw new ApiError(401, "Unauthorized request to update video");
    }
 

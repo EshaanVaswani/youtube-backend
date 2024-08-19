@@ -150,7 +150,7 @@ const addVideoToPlaylist = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Playlist not found");
    }
 
-   if (playlist.owner !== req.user?._id) {
+   if (!playlist.owner.equals(req.user?._id)) {
       throw new ApiError(401, "Unauthorized request to add video to playlist");
    }
 
@@ -213,7 +213,7 @@ const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Playlist not found");
    }
 
-   if (playlist.owner !== req.user?._id) {
+   if (!playlist.owner.equals(req.user?._id)) {
       throw new ApiError(
          401,
          "Unauthorized request to delete video from playlist"
@@ -273,7 +273,7 @@ const deletePlaylist = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Playlist not found");
    }
 
-   if (playlist.owner !== req.user?._id) {
+   if (!playlist.owner.equals(req.user?._id)) {
       throw new ApiError(401, "Unauthorized request to delete the playlist");
    }
 
@@ -302,7 +302,7 @@ const updatePlaylist = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Playlist not found");
    }
 
-   if (playlist.owner !== req.user?._id) {
+   if (!playlist.owner.equals(req.user?._id)) {
       throw new ApiError(401, "Unauthorized request to update playlist");
    }
 

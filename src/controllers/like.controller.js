@@ -120,9 +120,7 @@ const getLikedVideos = asyncHandler(async (req, res) => {
       {
          $match: {
             likedBy: new mongoose.Types.ObjectId(req.user?._id),
-            video: {
-               $exists: true,
-            },
+            video: { $exists: true },
          },
       },
       {
@@ -138,25 +136,43 @@ const getLikedVideos = asyncHandler(async (req, res) => {
                      localField: "owner",
                      foreignField: "_id",
                      as: "owner",
-                     pipeline: [
-                        {
-                           $project: {
-                              fullName: 1,
-                              username: 1,
-                              avatar: 1,
-                           },
-                        },
-                     ],
+                  },
+               },
+               { $unwind: "$owner" },
+               {
+                  $project: {
+                     title: 1,
+                     description: 1,
+                     url: 1,
+                     "owner.fullName": 1,
+                     "owner.username": 1,
+                     "owner.avatar": 1,
                   },
                },
             ],
          },
       },
       {
-         $addFields: {
-            $videosCount: {
-               $size: "$likedVideos",
+         $unwind: "$likedVideos",
+      },
+      {
+         $group: {
+            _id: "$likedBy",
+            likedVideos: {
+               $push: "$likedVideos",
             },
+         },
+      },
+      {
+         $addFields: {
+            videosCount: { $size: "$likedVideos" },
+         },
+      },
+      {
+         $project: {
+            _id: 0,
+            likedVideos: 1,
+            videosCount: 1,
          },
       },
    ]);
@@ -167,7 +183,9 @@ const getLikedVideos = asyncHandler(async (req, res) => {
 
    return res
       .status(200)
-      .json(new ApiResponse(200, videos, "Liked videos fetched successfully"));
+      .json(
+         new ApiResponse(200, videos[0], "Liked videos fetched successfully")
+      );
 });
 
 export { toggleCommentLike, toggleTweetLike, toggleVideoLike, getLikedVideos };

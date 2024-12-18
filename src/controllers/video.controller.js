@@ -12,125 +12,115 @@ import {
 } from "../utils/cloudinary.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
-   const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
+   const {
+      page = 1,
+      limit = 10,
+      query,
+      sortBy = "createdAt",
+      sortType = "desc",
+   } = req.query;
 
-   const matchStage = {};
+   const pipeline = [];
 
-   if (userId && isValidObjectId(userId)) {
-      matchStage["$match"] = {
-         owner: new mongoose.Types.ObjectId(userId),
-      };
-   } else if (query) {
-      matchStage["$match"] = {
+   const matchConditions = [];
+
+   if (req.query.userId && isValidObjectId(req.query.userId)) {
+      matchConditions.push({
+         owner: new mongoose.Types.ObjectId(req.query.userId),
+      });
+   }
+
+   if (query) {
+      matchConditions.push({
          $or: [
+            { title: { $regex: query, $options: "i" } },
+            { description: { $regex: query, $options: "i" } },
+         ],
+      });
+   }
+
+   if (matchConditions.length > 0) {
+      pipeline.push({
+         $match:
+            matchConditions.length > 1
+               ? { $and: matchConditions }
+               : matchConditions[0],
+      });
+   }
+
+   pipeline.push({
+      $lookup: {
+         from: "users",
+         localField: "owner",
+         foreignField: "_id",
+         as: "owner",
+         pipeline: [
             {
-               title: {
-                  $regex: query,
-                  $options: "i",
-               },
-            },
-            {
-               description: {
-                  $regex: query,
-                  $options: "i",
+               $project: {
+                  fullName: 1,
+                  username: 1,
+                  avatar: 1,
                },
             },
          ],
-      };
-   } else {
-      matchStage["$match"] = {};
-   }
-
-   if (userId && query) {
-      matchStage["$match"] = {
-         $and: [
-            {
-               owner: new mongoose.Types.ObjectId(userId),
-            },
-            {
-               $or: [
-                  {
-                     title: {
-                        $regex: query,
-                        $options: "i",
-                     },
-                  },
-                  {
-                     description: {
-                        $regex: query,
-                        $options: "i",
-                     },
-                  },
-               ],
-            },
-         ],
-      };
-   }
-
-   const sortStage = {};
-
-   if (sortBy && sortType) {
-      sortStage["$sort"] = {
-         [sortBy]: sortType === "asc" ? 1 : -1,
-      };
-   } else {
-      sortStage["$sort"] = {
-         createdAt: -1,
-      };
-   }
-
-   const allVideos = await Video.aggregate([
-      matchStage,
-      {
-         $lookup: {
-            from: "users",
-            localField: "owner",
-            foreignField: "_id",
-            as: "owner",
-            pipeline: [
-               {
-                  $project: {
-                     fullName: 1,
-                     username: 1,
-                     avatar: 1,
-                  },
-               },
-            ],
-         },
       },
-      {
-         $lookup: {
-            from: "likes",
-            localField: "_id",
-            foreignField: "video",
-            as: "likes",
-         },
-      },
-      sortStage,
-      {
-         $addFields: {
-            owner: {
-               $first: "$owner",
-            },
-            likeCount: {
-               $size: "$likes",
-            },
-         },
-      },
-   ]);
-
-   const videos = await Video.aggregatePaginate(allVideos, {
-      page: isNaN(Number(page)) ? 1 : page,
-      limit: isNaN(Number(limit)) ? 5 : limit,
    });
 
-   if (!videos || !videos.docs.length) {
-      throw new ApiError(404, "No videos found");
-   }
+   pipeline.push({
+      $lookup: {
+         from: "likes",
+         localField: "_id",
+         foreignField: "video",
+         as: "likes",
+      },
+   });
 
-   return res
-      .status(200)
-      .json(new ApiResponse(200, videos, "Videos fetched successfully"));
+   pipeline.push({
+      $addFields: {
+         owner: { $first: "$owner" },
+         likesCount: { $size: "$likes" },
+      },
+   });
+
+   pipeline.push({
+      $project: {
+         likes: 0,
+         __v: 0,
+      },
+   });
+
+   pipeline.push({
+      $sort: {
+         [sortBy]: sortType === "asc" ? 1 : -1,
+      },
+   });
+
+   const options = {
+      page: Number(page) || 1,
+      limit: Number(limit) || 10,
+   };
+
+   try {
+      const videos = await Video.aggregatePaginate(
+         Video.aggregate(pipeline),
+         options
+      );
+
+      return res
+         .status(200)
+         .json(
+            new ApiResponse(
+               200,
+               videos,
+               videos.docs.length
+                  ? "Videos fetched successfully"
+                  : "No videos found"
+            )
+         );
+   } catch (error) {
+      console.error("Error fetching videos:", error);
+      throw new ApiError(500, "Error fetching videos");
+   }
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {

@@ -201,11 +201,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                $size: "$likes",
             },
             isLiked: {
-               $cond: {
-                  if: { $in: [req.user._id, "$likes.likedBy"] },
-                  then: true,
-                  else: false,
-               },
+               $in: [req.user?._id, "$likes.likedBy"],
             },
          },
       },
@@ -237,13 +233,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                         $size: "$subscribers",
                      },
                      isSubscribed: {
-                        $cond: {
-                           if: {
-                              $in: [req.user?._id, "$subscribers.subscriber"],
-                           },
-                           then: true,
-                           else: false,
-                        },
+                        $in: [req.user?._id, "$subscribers.subscriber"],
                      },
                   },
                },
@@ -259,20 +249,9 @@ const getVideoById = asyncHandler(async (req, res) => {
       },
    ]);
 
-   if (!video) {
+   if (!video?.length) {
       throw new ApiError(404, "Video not found");
    }
-
-   // increment views
-   await Video.findByIdAndUpdate(
-      videoId,
-      {
-         $inc: {
-            views: 1,
-         },
-      },
-      { new: true }
-   );
 
    // add video to user's watch history
    await User.findByIdAndUpdate(
@@ -288,6 +267,32 @@ const getVideoById = asyncHandler(async (req, res) => {
    return res
       .status(200)
       .json(new ApiResponse(200, video[0], "Video found successfully"));
+});
+
+const viewVideo = asyncHandler(async (req, res) => {
+   const { videoId } = req.params;
+
+   if (!videoId || !isValidObjectId(videoId)) {
+      throw new ApiError(400, "Video id is missing or invalid");
+   }
+
+   const video = await Video.findById(videoId);
+
+   if (!video) {
+      throw new ApiError(404, "Video not found");
+   }
+
+   await Video.findByIdAndUpdate(
+      videoId,
+      {
+         $inc: {
+            views: 1,
+         },
+      },
+      { new: true }
+   );
+
+   return res.status(200).json(new ApiResponse(200, {}, "Video viewed"));
 });
 
 const updateVideo = asyncHandler(async (req, res) => {
@@ -416,6 +421,7 @@ export {
    getAllVideos,
    publishAVideo,
    getVideoById,
+   viewVideo,
    updateVideo,
    deleteVideo,
    togglePublishStatus,

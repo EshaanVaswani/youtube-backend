@@ -269,6 +269,106 @@ const getVideoById = asyncHandler(async (req, res) => {
       .json(new ApiResponse(200, video[0], "Video found successfully"));
 });
 
+const getVideoStats = asyncHandler(async (req, res) => {
+   const { videoId } = req.params;
+
+   if (!videoId || !isValidObjectId(videoId)) {
+      throw new ApiError(400, "Video id is missing or invalid");
+   }
+
+   const video = await Video.aggregate([
+      {
+         $match: {
+            _id: new mongoose.Types.ObjectId(videoId),
+         },
+      },
+      {
+         $lookup: {
+            from: "likes",
+            localField: "_id",
+            foreignField: "video",
+            as: "likes",
+         },
+      },
+      {
+         $addFields: {
+            likeCount: {
+               $size: "$likes",
+            },
+            isLiked: {
+               $in: [req.user?._id, "$likes.likedBy"],
+            },
+         },
+      },
+      {
+         $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner",
+            pipeline: [
+               {
+                  $project: {
+                     username: 1,
+                     fullName: 1,
+                     avatar: 1,
+                  },
+               },
+               {
+                  $lookup: {
+                     from: "subscriptions",
+                     localField: "_id",
+                     foreignField: "channel",
+                     as: "subscribers",
+                  },
+               },
+               {
+                  $addFields: {
+                     subscriberCount: {
+                        $size: "$subscribers",
+                     },
+                     isSubscribed: {
+                        $in: [req.user?._id, "$subscribers.subscriber"],
+                     },
+                  },
+               },
+            ],
+         },
+      },
+      {
+         $addFields: {
+            owner: {
+               $first: "$owner",
+            },
+         },
+      },
+      {
+         $project: {
+            owner: 1,
+            likeCount: 1,
+            isLiked: 1,
+            views: 1,
+         },
+      },
+   ]);
+
+   if (!video?.length) {
+      throw new ApiError(404, "Video not found");
+   }
+
+   const stats = {
+      likeCount: video[0].likeCount,
+      isLiked: video[0].isLiked,
+      subscriberCount: video[0].owner.subscriberCount,
+      isSubscribed: video[0].owner.isSubscribed,
+      views: video[0].views,
+   };
+
+   return res
+      .status(200)
+      .json(new ApiResponse(200, stats, "Video stats found successfully"));
+});
+
 const viewVideo = asyncHandler(async (req, res) => {
    const { videoId } = req.params;
 
@@ -421,6 +521,7 @@ export {
    getAllVideos,
    publishAVideo,
    getVideoById,
+   getVideoStats,
    viewVideo,
    updateVideo,
    deleteVideo,

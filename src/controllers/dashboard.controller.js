@@ -13,6 +13,23 @@ const getChannelStats = asyncHandler(async (req, res) => {
       },
       {
          $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner",
+            pipeline: [
+               {
+                  $project: {
+                     fullName: 1,
+                     avatar: 1,
+                     username: 1,
+                  },
+               },
+            ],
+         },
+      },
+      {
+         $lookup: {
             from: "likes",
             localField: "_id",
             foreignField: "video",
@@ -20,16 +37,9 @@ const getChannelStats = asyncHandler(async (req, res) => {
          },
       },
       {
-         $addFields: {
-            likes: {
-               $size: "$likes",
-            },
-            owner: new mongoose.Types.ObjectId(req.user?._id),
-         },
-      },
-      {
          $group: {
             _id: null,
+            owner: { $first: "$owner" },
             totalViews: {
                $sum: "$views",
             },
@@ -37,37 +47,30 @@ const getChannelStats = asyncHandler(async (req, res) => {
                $sum: 1,
             },
             totalLikes: {
-               $sum: "$likes",
+               $sum: { $size: "$likes" },
             },
          },
       },
       {
          $lookup: {
             from: "subscriptions",
-            localField: "owner",
+            localField: "_id",
             foreignField: "channel",
             as: "subscribers",
          },
       },
       {
-         $addFields: {
-            totalSubscribers: {
-               $size: "$subscribers",
-            },
-         },
-      },
-      {
          $project: {
             owner: 1,
-            totalLikes: 1,
-            totalSubscribers: 1,
-            totalVideos: 1,
             totalViews: 1,
+            totalLikes: 1,
+            totalVideos: 1,
+            totalSubscribers: { $size: "$subscribers" },
          },
       },
    ]);
 
-   if (!stats) {
+   if (!stats?.length) {
       throw new ApiError(
          500,
          "Something went wrong while fetching channel stats"
@@ -76,7 +79,9 @@ const getChannelStats = asyncHandler(async (req, res) => {
 
    return res
       .status(200)
-      .json(new ApiResponse(200, stats, "Channel stats fetched successfully"));
+      .json(
+         new ApiResponse(200, stats[0], "Channel stats fetched successfully")
+      );
 });
 
 const getChannelVideos = asyncHandler(async (req, res) => {

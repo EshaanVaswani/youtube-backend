@@ -49,6 +49,7 @@ const getUserTweets = asyncHandler(async (req, res) => {
             pipeline: [
                {
                   $project: {
+                     _id: 1,
                      username: 1,
                      avatar: 1,
                      fullName: 1,

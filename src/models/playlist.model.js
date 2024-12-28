@@ -20,6 +20,11 @@ const playlistSchema = new mongoose.Schema(
          type: mongoose.Schema.Types.ObjectId,
          ref: "User",
       },
+      visibility: {
+         type: Boolean,
+         default: true,
+         required: true,
+      },
    },
    { timestamps: true }
 );

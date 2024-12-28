@@ -7,7 +7,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const createPlaylist = asyncHandler(async (req, res) => {
-   const { name, description } = req.body;
+   const { name, description, visibility } = req.body;
 
    if (!name) {
       throw new ApiError(400, "Playlist name is required");
@@ -18,6 +18,7 @@ const createPlaylist = asyncHandler(async (req, res) => {
       description: description || "",
       videos: [],
       owner: req.user?._id,
+      visibility,
    });
 
    if (!playlist) {
@@ -96,9 +97,15 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
       },
       {
          $addFields: {
+            owner: { $first: "$playlistOwner" },
             totalVideos: {
                $size: "$playlistVideos",
             },
+         },
+      },
+      {
+         $project: {
+            playlistOwner: 0,
          },
       },
    ]);
@@ -126,6 +133,10 @@ const getPlaylistById = asyncHandler(async (req, res) => {
 
    if (!playlist) {
       throw new ApiError(404, "Playlist not found");
+   }
+
+   if (playlist.visibility === false && !playlist.owner.equals(req.user?._id)) {
+      throw new ApiError(401, "Unauthorized request to view the playlist");
    }
 
    return res
@@ -191,7 +202,7 @@ const addVideoToPlaylist = asyncHandler(async (req, res) => {
          new ApiResponse(
             200,
             updatedPlaylist,
-            "Video added to the playlist successfully"
+            `Video added to ${updatedPlaylist.name}`
          )
       );
 });
@@ -255,7 +266,7 @@ const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
          new ApiResponse(
             200,
             updatedPlaylist,
-            "Video removed from the playlist successfully"
+            `Video removed from ${updatedPlaylist.name}`
          )
       );
 });
@@ -290,7 +301,7 @@ const deletePlaylist = asyncHandler(async (req, res) => {
 
 const updatePlaylist = asyncHandler(async (req, res) => {
    const { playlistId } = req.params;
-   const { name, description } = req.body;
+   const { name, description, visibility } = req.body;
 
    if (!playlistId || !isValidObjectId(playlistId)) {
       throw new ApiError(400, "Playlist id is missing or invalid");
@@ -316,6 +327,7 @@ const updatePlaylist = asyncHandler(async (req, res) => {
          $set: {
             name,
             description,
+            visibility,
          },
       },
       { new: true }
@@ -335,6 +347,37 @@ const updatePlaylist = asyncHandler(async (req, res) => {
       );
 });
 
+const toggleVisibility = asyncHandler(async (req, res) => {
+   const { playlistId } = req.params;
+
+   if (!playlistId || !isValidObjectId(playlistId)) {
+      throw new ApiError(400, "Playlist id is missing or invalid");
+   }
+
+   const playlist = await Playlist.findById(playlistId);
+
+   if (!playlist) {
+      throw new ApiError(404, "Playlist not found");
+   }
+
+   if (!playlist.owner.equals(req.user?._id)) {
+      throw new ApiError(401, "Unauthorized request to update playlist");
+   }
+
+   playlist.visibility = !playlist.visibility;
+   await playlist.save();
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(
+            200,
+            playlist,
+            "Playlist visibility updated successfully"
+         )
+      );
+});
+
 export {
    createPlaylist,
    getUserPlaylists,
@@ -343,4 +386,5 @@ export {
    removeVideoFromPlaylist,
    deletePlaylist,
    updatePlaylist,
+   toggleVisibility,
 };

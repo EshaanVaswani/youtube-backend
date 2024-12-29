@@ -126,22 +126,80 @@ const getPlaylistById = asyncHandler(async (req, res) => {
       throw new ApiError("Playlist id is missing or invalid");
    }
 
-   const playlist = await Playlist.findById(playlistId).populate(
-      "owner",
-      "fullName avatar username"
-   );
+   const playlist = await Playlist.aggregate([
+      {
+         $match: {
+            _id: new mongoose.Types.ObjectId(playlistId),
+         },
+      },
+      {
+         $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner",
+            pipeline: [
+               {
+                  $project: {
+                     fullName: 1,
+                     avatar: 1,
+                     username: 1,
+                  },
+               },
+            ],
+         },
+      },
+      {
+         $lookup: {
+            from: "videos",
+            localField: "videos",
+            foreignField: "_id",
+            as: "playlistVideos",
+            pipeline: [
+               {
+                  $lookup: {
+                     from: "users",
+                     localField: "owner",
+                     foreignField: "_id",
+                     as: "owner",
+                     pipeline: [
+                        {
+                           $project: {
+                              fullName: 1,
+                              username: 1,
+                              avatar: 1,
+                           },
+                        },
+                     ],
+                  },
+               },
+            ],
+         },
+      },
+      {
+         $addFields: {
+            owner: { $first: "$owner" },
+            totalVideos: {
+               $size: "$playlistVideos",
+            },
+         },
+      },
+   ]);
 
-   if (!playlist) {
+   if (!playlist?.length) {
       throw new ApiError(404, "Playlist not found");
    }
 
-   if (playlist.visibility === false && !playlist.owner.equals(req.user?._id)) {
+   if (
+      playlist[0].visibility === false &&
+      !playlist[0].owner._id.equals(req.user?._id)
+   ) {
       throw new ApiError(401, "Unauthorized request to view the playlist");
    }
 
    return res
       .status(200)
-      .json(new ApiResponse(200, playlist, "Playlist fetched successfully"));
+      .json(new ApiResponse(200, playlist[0], "Playlist fetched successfully"));
 });
 
 const addVideoToPlaylist = asyncHandler(async (req, res) => {
@@ -317,8 +375,8 @@ const updatePlaylist = asyncHandler(async (req, res) => {
       throw new ApiError(401, "Unauthorized request to update playlist");
    }
 
-   if (!name || !description) {
-      throw new ApiError(400, "Name or description cannot be empty");
+   if (!name) {
+      throw new ApiError(400, "Name cannot be empty");
    }
 
    const updatedPlaylist = await Playlist.findByIdAndUpdate(

@@ -118,12 +118,49 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
       throw new ApiError(404, "User not found");
    }
 
-   const channels = await Subscription.find({
-      subscriber: subscriberId,
-   }).populate({
-      path: "channel",
-      select: "-watchHistory -password -refreshToken -createdAt -updatedAt",
-   });
+   const channels = await Subscription.aggregate([
+      {
+         $match: { subscriber: new mongoose.Types.ObjectId(subscriberId) },
+      },
+      {
+         $lookup: {
+            from: "users",
+            localField: "channel",
+            foreignField: "_id",
+            as: "channel",
+            pipeline: [
+               {
+                  $project: {
+                     watchHistory: 0,
+                     password: 0,
+                     refreshToken: 0,
+                     createdAt: 0,
+                     updatedAt: 0,
+                  },
+               },
+            ],
+         },
+      },
+      {
+         $lookup: {
+            from: "subscriptions",
+            localField: "channel._id",
+            foreignField: "channel",
+            as: "subscribers",
+         },
+      },
+      {
+         $addFields: {
+            subscriberCount: { $size: "$subscribers" },
+            channel: { $arrayElemAt: ["$channel", 0] },
+         },
+      },
+      {
+         $project: {
+            subscribers: 0,
+         },
+      },
+   ]);
 
    if (!channels) {
       throw new ApiError(

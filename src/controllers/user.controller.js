@@ -7,7 +7,7 @@ import {
    uploadOnCloudinary,
 } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
+import mongoose, { isValidObjectId } from "mongoose";
 
 const generateAccessAndRefreshTokens = async (userId) => {
    try {
@@ -448,11 +448,14 @@ const getWatchHistory = asyncHandler(async (req, res) => {
          },
       },
       {
+         $unwind: "$watchHistory",
+      },
+      {
          $lookup: {
             from: "videos",
-            localField: "watchHistory",
+            localField: "watchHistory.video",
             foreignField: "_id",
-            as: "watchHistory",
+            as: "videoData",
             pipeline: [
                {
                   $lookup: {
@@ -461,7 +464,6 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                      foreignField: "_id",
                      as: "owner",
                      pipeline: [
-                        // try writing this pipeline in the second stage and observe the change
                         {
                            $project: {
                               fullName: 1,
@@ -482,17 +484,76 @@ const getWatchHistory = asyncHandler(async (req, res) => {
             ],
          },
       },
+      {
+         $addFields: {
+            video: {
+               $first: "$videoData",
+            },
+            watchedAt: "$watchHistory.watchedAt",
+         },
+      },
+      {
+         $project: {
+            _id: "$video._id",
+            title: "$video.title",
+            description: "$video.description",
+            thumbnail: "$video.thumbnail",
+            duration: "$video.duration",
+            views: "$video.views",
+            owner: "$video.owner",
+            watchedAt: 1,
+         },
+      },
+      {
+         $sort: {
+            watchedAt: -1,
+         },
+      },
    ]);
 
    return res
       .status(200)
-      .json(
-         new ApiResponse(
-            200,
-            user[0].watchHistory,
-            "Watch History fetched successfully"
-         )
-      );
+      .json(new ApiResponse(200, user, "Watch History fetched successfully"));
+});
+
+const removeVideoFromWatchHistory = asyncHandler(async (req, res) => {
+   const { videoId } = req.params;
+
+   if (!videoId || !isValidObjectId(videoId)) {
+      throw new ApiError(400, "Video id is required");
+   }
+
+   await User.findByIdAndUpdate(
+      req.user._id,
+      {
+         $pull: {
+            watchHistory: {
+               video: videoId,
+            },
+         },
+      },
+      { new: true }
+   );
+
+   return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Video removed from watch history"));
+});
+
+const clearWatchHistory = asyncHandler(async (req, res) => {
+   await User.findByIdAndUpdate(
+      req.user._id,
+      {
+         $set: {
+            watchHistory: [],
+         },
+      },
+      { new: true }
+   );
+
+   return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Watch history cleared successfully"));
 });
 
 export {
@@ -507,4 +568,6 @@ export {
    updateUserCoverImage,
    getUserChannelProfile,
    getWatchHistory,
+   removeVideoFromWatchHistory,
+   clearWatchHistory,
 };

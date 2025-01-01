@@ -253,17 +253,6 @@ const getVideoById = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Video not found");
    }
 
-   // add video to user's watch history
-   await User.findByIdAndUpdate(
-      req.user?._id,
-      {
-         $addToSet: {
-            watchHistory: videoId,
-         },
-      },
-      { new: true }
-   );
-
    return res
       .status(200)
       .json(new ApiResponse(200, video[0], "Video found successfully"));
@@ -387,6 +376,22 @@ const viewVideo = asyncHandler(async (req, res) => {
       {
          $inc: {
             views: 1,
+         },
+      },
+      { new: true }
+   );
+
+   await User.findOneAndUpdate(
+      {
+         _id: req.user?._id,
+         "watchHistory.video": { $ne: videoId },
+      },
+      {
+         $push: {
+            watchHistory: {
+               video: videoId,
+               watchedAt: new Date(),
+            },
          },
       },
       { new: true }

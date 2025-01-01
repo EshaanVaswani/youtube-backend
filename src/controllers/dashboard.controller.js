@@ -70,17 +70,18 @@ const getChannelStats = asyncHandler(async (req, res) => {
       },
    ]);
 
-   if (!stats?.length) {
-      throw new ApiError(
-         500,
-         "Something went wrong while fetching channel stats"
-      );
-   }
+   const response = {
+      owner: stats?.[0]?.owner?.[0] || req.user,
+      totalViews: stats?.[0]?.totalViews || 0,
+      totalLikes: stats?.[0]?.totalLikes || 0,
+      totalVideos: stats?.[0]?.totalVideos || 0,
+      totalSubscribers: stats?.[0]?.totalSubscribers || 0,
+   };
 
    return res
       .status(200)
       .json(
-         new ApiResponse(200, stats[0], "Channel stats fetched successfully")
+         new ApiResponse(200, response, "Channel stats fetched successfully")
       );
 });
 
@@ -113,17 +114,15 @@ const getChannelVideos = asyncHandler(async (req, res) => {
       },
    ]);
 
-   if (!videos || !videos.length) {
-      throw new ApiError(404, "Videos not found");
-   }
-
    return res
       .status(200)
       .json(
          new ApiResponse(
             200,
-            videos,
-            "Successfully fetched all videos of channel"
+            videos || [],
+            videos.length
+               ? "Successfully fetched all videos of channel"
+               : "No videos found for this channel"
          )
       );
 });

@@ -81,13 +81,15 @@ const getUserTweets = asyncHandler(async (req, res) => {
       },
    ]);
 
-   if (!tweets || !tweets.length) {
-      throw new ApiError(404, "No tweets found");
-   }
-
    return res
       .status(200)
-      .json(new ApiResponse(200, tweets, "Tweets fetched successfully"));
+      .json(
+         new ApiResponse(
+            200,
+            tweets || [],
+            tweets.length ? "Tweets fetched successfully" : "No tweets found"
+         )
+      );
 });
 
 const updateTweet = asyncHandler(async (req, res) => {

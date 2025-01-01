@@ -110,13 +110,17 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
       },
    ]);
 
-   if (!playlists || !playlists.length) {
-      throw new ApiError(404, "No playlists found");
-   }
-
    return res
       .status(200)
-      .json(new ApiResponse(200, playlists, "Playlists fetched successfully"));
+      .json(
+         new ApiResponse(
+            200,
+            playlists || [],
+            playlists.length
+               ? "Playlists fetched successfully"
+               : "No playlists found"
+         )
+      );
 });
 
 const getPlaylistById = asyncHandler(async (req, res) => {

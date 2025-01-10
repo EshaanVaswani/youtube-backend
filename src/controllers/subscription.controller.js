@@ -180,4 +180,45 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
       );
 });
 
-export { toggleSubscription, getUserChannelSubscribers, getSubscribedChannels };
+const deleteSubscriber = asyncHandler(async (req, res) => {
+   const { subscriberId } = req.params;
+
+   if (!subscriberId || !isValidObjectId(subscriberId)) {
+      throw new ApiError(400, "Channel id is missing or invalid");
+   }
+
+   const subscriber = await User.findById(subscriberId);
+
+   if (!subscriber) {
+      throw new ApiError(404, "Subscriber not found");
+   }
+
+   const isSubscribed = await Subscription.findOne({
+      channel: req.user?._id,
+      subscriber: subscriberId,
+   });
+
+   if (!isSubscribed) {
+      throw new ApiError(404, "Subscriber not found in the channel");
+   }
+
+   const deleteSubscriber = await Subscription.deleteOne({
+      channel: req.user?._id,
+      subscriber: subscriberId,
+   });
+
+   if (!deleteSubscriber) {
+      throw new ApiError(500, "Something went wrong while deleting subscriber");
+   }
+
+   return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Subscriber deleted successfully"));
+});
+
+export {
+   toggleSubscription,
+   getUserChannelSubscribers,
+   getSubscribedChannels,
+   deleteSubscriber,
+};

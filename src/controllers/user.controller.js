@@ -256,9 +256,13 @@ const changePassword = asyncHandler(async (req, res) => {
 
    await user.save({ validateBeforeSave: false });
 
+   const updatedUser = await User.findById(req.user?._id).select(
+      "-password -refreshToken"
+   );
+
    return res
       .status(200)
-      .json(new ApiResponse(200, {}, "Password changed successfully"));
+      .json(new ApiResponse(200, updatedUser, "Password changed successfully"));
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
@@ -275,9 +279,9 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
    // validation
    // find user in db and update the fields
 
-   const { fullName, email } = req.body;
+   const { fullName, username, email } = req.body;
 
-   if (!fullName || !email) {
+   if (!fullName || !username || !email) {
       throw new ApiError(400, "All fields are required");
    }
 
@@ -286,6 +290,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
       {
          $set: {
             fullName,
+            username,
             email,
          },
       },

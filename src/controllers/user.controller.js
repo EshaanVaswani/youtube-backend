@@ -141,6 +141,8 @@ const loginUser = asyncHandler(async (req, res) => {
    const options = {
       httpOnly: true,
       secure: true,
+      sameSite: "none",
+      domain: process.env.DOMAIN,
    };
 
    return res
@@ -175,6 +177,8 @@ const logoutUser = asyncHandler(async (req, res) => {
    const options = {
       httpOnly: true,
       secure: true,
+      sameSite: "none",
+      domain: process.env.DOMAIN,
    };
 
    return res
@@ -216,6 +220,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       const options = {
          httpOnly: true,
          secure: true,
+         sameSite: "none",
+         domain: process.env.DOMAIN,
       };
 
       const { accessToken, refreshToken } =

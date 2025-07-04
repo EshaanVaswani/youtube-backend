@@ -440,6 +440,113 @@ const toggleVisibility = asyncHandler(async (req, res) => {
       );
 });
 
+const saveVideoToWatchLater = asyncHandler(async (req, res) => {
+   const { videoId } = req.params;
+
+   if (!videoId || !isValidObjectId(videoId)) {
+      throw new ApiError(400, "Video id is missing or invalid");
+   }
+
+   const video = await Video.findById(videoId);
+
+   if (!video) {
+      throw new ApiError(404, "Video not found");
+   }
+
+   const watchLater = await Playlist.findOne({
+      owner: req.user?._id,
+      name: "Watch Later",
+   });
+
+   if (!watchLater) {
+      const newWatchLater = await Playlist.create({
+         name: "Watch Later",
+         description: "Videos to watch later",
+         videos: [videoId],
+         owner: req.user?._id,
+         visibility: false,
+      });
+
+      return res
+         .status(200)
+         .json(
+            new ApiResponse(200, newWatchLater, "Video added to watch later")
+         );
+   } else if (watchLater.videos.includes(videoId)) {
+      return res
+         .status(200)
+         .json(new ApiResponse(400, {}, "Video already exists in watch later"));
+   } else {
+      watchLater.videos.push(videoId);
+      await watchLater.save();
+   }
+
+   return res
+      .status(200)
+      .json(new ApiResponse(200, watchLater, "Video added to watch later"));
+});
+
+const getWatchLaterVideos = asyncHandler(async (req, res) => {
+   const watchLater = await Playlist.findOne({
+      owner: req.user._id,
+      name: "Watch Later",
+   });
+
+   if (!watchLater) {
+      return res
+         .status(200)
+         .json(new ApiResponse(200, [], "No videos in watch later"));
+   }
+
+   const videos = await Video.find({
+      _id: { $in: watchLater.videos },
+   }).populate("owner", "fullName username avatar");
+
+   return res.status(200).json(
+      new ApiResponse(
+         200,
+         {
+            videos: videos,
+            videosCount: videos.length,
+         },
+         videos.length
+            ? "Watch later videos fetched successfully"
+            : "No videos in watch later"
+      )
+   );
+});
+
+const removeFromWatchLater = asyncHandler(async (req, res) => {
+   const { videoId } = req.params;
+   if (!videoId || !isValidObjectId(videoId)) {
+      throw new ApiError(400, "Video id is missing or invalid");
+   }
+
+   const watchLater = await Playlist.findOne({
+      owner: req.user._id,
+      name: "Watch Later",
+   });
+
+   if (!watchLater) {
+      return res
+         .status(200)
+         .json(new ApiResponse(400, {}, "No videos in watch later"));
+   }
+
+   if (!watchLater.videos.includes(videoId)) {
+      return res
+         .status(200)
+         .json(new ApiResponse(400, {}, "Video doesn't exist in watch later"));
+   }
+
+   watchLater.videos.pull(videoId);
+   await watchLater.save();
+
+   return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Video removed from watch later"));
+});
+
 export {
    createPlaylist,
    getUserPlaylists,
@@ -449,4 +556,7 @@ export {
    deletePlaylist,
    updatePlaylist,
    toggleVisibility,
+   saveVideoToWatchLater,
+   getWatchLaterVideos,
+   removeFromWatchLater,
 };

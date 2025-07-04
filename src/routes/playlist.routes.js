@@ -5,7 +5,10 @@ import {
    deletePlaylist,
    getPlaylistById,
    getUserPlaylists,
+   getWatchLaterVideos,
+   removeFromWatchLater,
    removeVideoFromPlaylist,
+   saveVideoToWatchLater,
    toggleVisibility,
    updatePlaylist,
 } from "../controllers/playlist.controller.js";
@@ -29,5 +32,9 @@ router.route("/add/:videoId/:playlistId").patch(addVideoToPlaylist);
 router.route("/remove/:videoId/:playlistId").patch(removeVideoFromPlaylist);
 
 router.route("/toggle/:playlistId").patch(toggleVisibility);
+
+router.route("/save/watch-later/:videoId").post(saveVideoToWatchLater);
+router.route("/remove/watch-later/:videoId").delete(removeFromWatchLater);
+router.route("/get/watch-later").get(getWatchLaterVideos);
 
 export default router;

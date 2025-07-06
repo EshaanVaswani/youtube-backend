@@ -35,6 +35,22 @@ const videoSchema = new mongoose.Schema(
          type: mongoose.Schema.Types.ObjectId,
          ref: "User",
       },
+      transcript: {
+         type: String,
+         default: "",
+      },
+      tags: {
+         type: [String],
+         default: [],
+      },
+      category: {
+         type: [String],
+         default: [],
+      },
+      totalWatchTime: {
+         type: Number,
+         default: 0,
+      },
    },
    { timestamps: true }
 );

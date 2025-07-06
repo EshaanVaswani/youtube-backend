@@ -19,7 +19,7 @@ const router = Router();
 
 router.route("/").get(getAllVideos);
 router.route("/:videoId").get(verifyJWTOptional, getVideoById);
-router.route("/view/:videoId").patch(verifyJWTOptional, viewVideo);
+router.route("/view/:videoId").post(verifyJWTOptional, viewVideo);
 router.route("/stats/:videoId").get(verifyJWTOptional, getVideoStats);
 
 router.use(verifyJWT);

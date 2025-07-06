@@ -10,6 +10,7 @@ import {
    deleteFromCloudinary,
    uploadOnCloudinary,
 } from "../utils/cloudinary.js";
+import { WatchHistory } from "../models/watch-history.model.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
    const {
@@ -124,7 +125,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
-   const { title, description } = req.body;
+   const { title, description, transcript, tags, category } = req.body;
 
    if ([title, description].some((field) => field?.trim() === "")) {
       throw new ApiError(400, "Title and description are required");
@@ -160,6 +161,9 @@ const publishAVideo = asyncHandler(async (req, res) => {
       duration: videoFileOnCloud.duration,
       views: 0,
       isPublished: true,
+      transcript,
+      tags,
+      category,
    });
 
    if (!video) {
@@ -337,6 +341,7 @@ const getVideoStats = asyncHandler(async (req, res) => {
             likeCount: 1,
             isLiked: 1,
             views: 1,
+            totalWatchTime: 1,
          },
       },
    ]);
@@ -351,6 +356,7 @@ const getVideoStats = asyncHandler(async (req, res) => {
       subscriberCount: video[0].owner.subscriberCount,
       isSubscribed: video[0].owner.isSubscribed,
       views: video[0].views,
+      totalWatchTime: video[0].totalWatchTime,
    };
 
    return res
@@ -360,54 +366,77 @@ const getVideoStats = asyncHandler(async (req, res) => {
 
 const viewVideo = asyncHandler(async (req, res) => {
    const { videoId } = req.params;
+   const { watchTime } = req.body;
+
+   console.log(`Video ID: ${videoId}, Watch Time: ${watchTime}`);
 
    if (!videoId || !isValidObjectId(videoId)) {
       throw new ApiError(400, "Video id is missing or invalid");
    }
 
    const video = await Video.findById(videoId);
-
    if (!video) {
       throw new ApiError(404, "Video not found");
    }
 
+   const isLoggedIn = !!req.user?._id;
+
+   if (!watchTime || isNaN(watchTime) || watchTime < 5) {
+      await Video.findByIdAndUpdate(
+         videoId,
+         { $inc: { views: 1 } },
+         { new: true }
+      );
+
+      if (isLoggedIn) {
+         await User.findOneAndUpdate(
+            {
+               _id: req.user._id,
+               "watchHistory.video": { $ne: videoId },
+            },
+            {
+               $push: {
+                  watchHistory: {
+                     video: videoId,
+                     watchedAt: new Date(),
+                  },
+               },
+            },
+            { new: true }
+         );
+      }
+
+      return res
+         .status(200)
+         .json(new ApiResponse(200, {}, "Video view counted"));
+   }
+
    await Video.findByIdAndUpdate(
       videoId,
-      {
-         $inc: {
-            views: 1,
-         },
-      },
+      { $inc: { totalWatchTime: Math.floor(watchTime) } },
       { new: true }
    );
 
-   await User.findOneAndUpdate(
-      {
-         _id: req.user?._id,
-         "watchHistory.video": { $ne: videoId },
-      },
-      {
-         $push: {
-            watchHistory: {
-               video: videoId,
-               watchedAt: new Date(),
-            },
+   if (isLoggedIn) {
+      await WatchHistory.findOneAndUpdate(
+         {
+            user: req.user._id,
+            video: videoId,
          },
-      },
-      { new: true }
-   );
+         {
+            $inc: { watchTime: Math.floor(watchTime) },
+         },
+         { upsert: true, new: true }
+      );
+   }
 
-   return res.status(200).json(new ApiResponse(200, {}, "Video viewed"));
+   return res.status(200).json(new ApiResponse(200, {}, "Watch time updated"));
 });
 
 const updateVideo = asyncHandler(async (req, res) => {
    const { videoId } = req.params;
 
-   const { title, description } = req.body;
-
-   if (!title || !description) {
-      throw new ApiError(400, "Title or description cannot be empty");
-   }
+   const { title, description, transcript, tags, category } = req.body;
 
    if (!videoId || !isValidObjectId(videoId)) {
       throw new ApiError(400, "Video id is missing or invalid");
@@ -423,9 +452,16 @@ const updateVideo = asyncHandler(async (req, res) => {
       throw new ApiError(401, "Unauthorized request to update video");
    }
 
+   const updateFields = {};
+
+   if (title) updateFields.title = title;
+   if (description) updateFields.description = description;
+   if (transcript) updateFields.transcript = transcript;
+   if (tags) updateFields.tags = tags;
+   if (category) updateFields.category = category;
+
    const thumbnailLocalPath = req.file?.path;
 
-   let updatedVideo;
    if (thumbnailLocalPath) {
       const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
 
@@ -433,29 +469,14 @@ const updateVideo = asyncHandler(async (req, res) => {
          throw new ApiError(400, "Error while deleting file from cloudinary");
       }
 
-      updatedVideo = await Video.findByIdAndUpdate(
-         videoId,
-         {
-            $set: {
-               title,
-               description,
-               thumbnail: thumbnail?.url,
-            },
-         },
-         { new: true }
-      );
-   } else {
-      updatedVideo = await Video.findByIdAndUpdate(
-         videoId,
-         {
-            $set: {
-               title,
-               description,
-            },
-         },
-         { new: true }
-      );
+      updateFields.thumbnail = thumbnail.url;
    }
+
+   const updatedVideo = await Video.findByIdAndUpdate(
+      videoId,
+      { $set: updateFields },
+      { new: true }
+   );
 
    if (!updatedVideo) {
       throw new ApiError(500, "Something went wrong while updating video");
